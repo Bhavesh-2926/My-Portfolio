@@ -360,7 +360,11 @@ export const getSupabaseConfig = (): SupabaseConfig => {
     const saved = localStorage.getItem(KEYS.SUPABASE_CONFIG);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed.url && parsed.anonKey) return parsed;
+      if (parsed.url && parsed.anonKey && !parsed.anonKey.startsWith('sb_secret_')) {
+        return parsed;
+      } else {
+        localStorage.removeItem(KEYS.SUPABASE_CONFIG);
+      }
     }
   } catch {
     // fallback
@@ -368,7 +372,7 @@ export const getSupabaseConfig = (): SupabaseConfig => {
 
   return {
     url: import.meta.env.VITE_SUPABASE_URL || '',
-    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || (import.meta as any).env.VITE_SUPABASE_PUBLISHABLE_KEY || ''
   };
 };
 
