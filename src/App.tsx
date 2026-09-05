@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getStoredData } from './lib/supabaseClient';
+import { getStoredData, syncPortfolioContentFromSupabase, getSupabase } from './lib/supabaseClient';
 import { Cursor } from './components/ui/Cursor';
 import { Navbar } from './components/ui/Navbar';
 import { Hero } from './sections/Hero';
@@ -31,6 +31,14 @@ export const App: React.FC = () => {
   const [isAdminView, setIsAdminView] = useState<boolean>(isPathAdmin());
 
   useEffect(() => {
+    // 1. Instantly fetch latest content from Supabase cloud database on startup
+    // Ensures mobile devices, other computers, and fresh visitors see updated content
+    syncPortfolioContentFromSupabase().then((synced) => {
+      if (synced) {
+        setData(getStoredData());
+      }
+    });
+
     const handleUpdate = () => {
       setData(getStoredData());
     };
@@ -39,10 +47,40 @@ export const App: React.FC = () => {
       setIsAdminView(isPathAdmin());
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncPortfolioContentFromSupabase().then(() => setData(getStoredData()));
+      }
+    };
+
     window.addEventListener('portfolio-data-updated', handleUpdate);
     window.addEventListener('storage', handleUpdate);
     window.addEventListener('popstate', handleLocation);
     window.addEventListener('hashchange', handleLocation);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // 2. Realtime Supabase Broadcast: Live sync across all devices without refresh
+    const client = getSupabase();
+    let channel: any = null;
+    if (client) {
+      channel = client
+        .channel('public:portfolio_content_live')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'portfolio_content' },
+          (payload: any) => {
+            if (payload?.new && payload.new.key && payload.new.data) {
+              try {
+                localStorage.setItem(payload.new.key, JSON.stringify(payload.new.data));
+              } catch {}
+              setData(getStoredData());
+            } else {
+              syncPortfolioContentFromSupabase().then(() => setData(getStoredData()));
+            }
+          }
+        )
+        .subscribe();
+    }
 
     // Optional owner hotkey: Ctrl + Shift + A to open /admin without typing in address bar
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -60,6 +98,10 @@ export const App: React.FC = () => {
       window.removeEventListener('popstate', handleLocation);
       window.removeEventListener('hashchange', handleLocation);
       window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (channel && client) {
+        client.removeChannel(channel);
+      }
     };
   }, []);
 
