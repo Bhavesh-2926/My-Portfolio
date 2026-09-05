@@ -256,6 +256,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [editingSoftSkill, setEditingSoftSkill] = useState<{ index: number; item: SoftSkill } | null>(null);
   const [isNewSoftSkill, setIsNewSoftSkill] = useState(false);
 
+  // Input states for Project technology tags & features bullets
+  const [projectTechInput, setProjectTechInput] = useState('');
+  const [projectFeatureInput, setProjectFeatureInput] = useState('');
+
+  // Input states for Experience technology tags & responsibilities bullets
+  const [expTechInput, setExpTechInput] = useState('');
+  const [expRespInput, setExpRespInput] = useState('');
+
+  // Skill management modal states
+  const [showAddSkillCategoryModal, setShowAddSkillCategoryModal] = useState(false);
+  const [newSkillCategoryName, setNewSkillCategoryName] = useState('');
+  const [addingSkillModal, setAddingSkillModal] = useState<{ catIndex: number; skillIndex?: number; name: string; level: string } | null>(null);
+
   // Search & Filter in Messages
   const [messageFilter, setMessageFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -681,6 +694,121 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setSoftSkills(updated);
       saveItem(KEYS.SOFT_SKILLS, updated);
     }
+  };
+
+  // Project Technologies & Features Handlers
+  const handleAddProjectTech = () => {
+    if (!projectTechInput.trim() || !editingProject) return;
+    const incoming = projectTechInput
+      .split(',')
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0 && !(editingProject.technologies || []).includes(t));
+    setEditingProject({
+      ...editingProject,
+      technologies: [...(editingProject.technologies || []), ...incoming]
+    });
+    setProjectTechInput('');
+  };
+
+  const handleRemoveProjectTech = (techToRemove: string) => {
+    if (!editingProject) return;
+    setEditingProject({
+      ...editingProject,
+      technologies: (editingProject.technologies || []).filter((t) => t !== techToRemove)
+    });
+  };
+
+  const handleAddProjectFeature = () => {
+    if (!projectFeatureInput.trim() || !editingProject) return;
+    setEditingProject({
+      ...editingProject,
+      features: [...(editingProject.features || []), projectFeatureInput.trim()]
+    });
+    setProjectFeatureInput('');
+  };
+
+  const handleRemoveProjectFeature = (index: number) => {
+    if (!editingProject) return;
+    const updated = [...(editingProject.features || [])];
+    updated.splice(index, 1);
+    setEditingProject({ ...editingProject, features: updated });
+  };
+
+  // Experience Technologies & Responsibilities Handlers
+  const handleAddExpTech = () => {
+    if (!expTechInput.trim() || !editingExperience) return;
+    const incoming = expTechInput
+      .split(',')
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0 && !(editingExperience.technologies || []).includes(t));
+    setEditingExperience({
+      ...editingExperience,
+      technologies: [...(editingExperience.technologies || []), ...incoming]
+    });
+    setExpTechInput('');
+  };
+
+  const handleRemoveExpTech = (techToRemove: string) => {
+    if (!editingExperience) return;
+    setEditingExperience({
+      ...editingExperience,
+      technologies: (editingExperience.technologies || []).filter((t) => t !== techToRemove)
+    });
+  };
+
+  const handleAddExpResp = () => {
+    if (!expRespInput.trim() || !editingExperience) return;
+    setEditingExperience({
+      ...editingExperience,
+      responsibilities: [...(editingExperience.responsibilities || []), expRespInput.trim()]
+    });
+    setExpRespInput('');
+  };
+
+  const handleRemoveExpResp = (index: number) => {
+    if (!editingExperience) return;
+    const updated = [...(editingExperience.responsibilities || [])];
+    updated.splice(index, 1);
+    setEditingExperience({ ...editingExperience, responsibilities: updated });
+  };
+
+  // Skill Category & Skill Item Handlers
+  const handleAddSkillCategory = () => {
+    if (!newSkillCategoryName.trim()) return;
+    const exists = skills.some((c) => c.category.toLowerCase() === newSkillCategoryName.trim().toLowerCase());
+    if (exists) {
+      alert('A skill category with this name already exists.');
+      return;
+    }
+    const updated = [...skills, { category: newSkillCategoryName.trim(), skills: [] }];
+    setSkills(updated);
+    saveItem(KEYS.SKILLS, updated);
+    setShowAddSkillCategoryModal(false);
+    setNewSkillCategoryName('');
+  };
+
+  const handleDeleteSkillCategory = (catIdx: number) => {
+    if (window.confirm(`Delete "${skills[catIdx].category}" category and all its skills?`)) {
+      const updated = [...skills];
+      updated.splice(catIdx, 1);
+      setSkills(updated);
+      saveItem(KEYS.SKILLS, updated);
+    }
+  };
+
+  const handleSaveSkillModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addingSkillModal || !addingSkillModal.name.trim()) return;
+    const { catIndex, skillIndex, name, level } = addingSkillModal;
+    const updated = [...skills];
+    if (skillIndex !== undefined) {
+      updated[catIndex].skills[skillIndex] = { name: name.trim(), level: level.trim() || 'Core' };
+    } else {
+      updated[catIndex].skills.push({ name: name.trim(), level: level.trim() || 'Core' });
+    }
+    setSkills(updated);
+    saveItem(KEYS.SKILLS, updated);
+    setAddingSkillModal(null);
   };
 
   // Messages CRUD & Supabase Sync
@@ -2428,70 +2556,108 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
 
               {skillsSubTab === 'technical' ? (
                 /* Technical Categories */
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-                  {skills.map((cat, catIdx) => (
-                    <div key={cat.category} className="glass-card" style={{ padding: '20px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--cyan-core)', fontSize: '1rem' }}>
-                            {cat.category}
-                          </span>
-                          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                            ({cat.skills.length} skills)
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const skillName = prompt('Enter new skill name:');
-                            if (skillName && skillName.trim()) {
-                              const level = prompt('Enter proficiency tag (e.g. Core, Automation, Advanced):') || 'Core';
-                              const updated = [...skills];
-                              updated[catIdx].skills.push({ name: skillName.trim(), level: level.trim() });
-                              setSkills(updated);
-                              saveItem(KEYS.SKILLS, updated);
-                            }
-                          }}
-                          className="btn-cyan"
-                          style={{ padding: '4px 10px', fontSize: '0.74rem' }}
-                        >
-                          <Plus size={13} /> Add Skill
-                        </button>
-                      </div>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0 }}>
+                      Manage technical skill categories and individual skill tags with proficiency levels (Core, Advanced, Expert, Automation, etc.).
+                    </p>
+                    <button
+                      onClick={() => setShowAddSkillCategoryModal(true)}
+                      className="btn-cyan"
+                      style={{ padding: '7px 14px', fontSize: '0.78rem' }}
+                    >
+                      <Plus size={15} /> Add New Skill Category
+                    </button>
+                  </div>
 
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {cat.skills.map((skill, sIdx) => (
-                          <div
-                            key={skill.name}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '5px 10px',
-                              borderRadius: '6px',
-                              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                              border: '1px solid rgba(255, 255, 255, 0.1)',
-                              fontSize: '0.78rem'
-                            }}
-                          >
-                            <span style={{ color: '#FFFFFF', fontWeight: 600 }}>{skill.name}</span>
-                            <span style={{ fontSize: '0.68rem', color: 'var(--cyan-core)' }}>({skill.level})</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+                    {skills.map((cat, catIdx) => (
+                      <div key={cat.category} className="glass-card" style={{ padding: '20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 700, color: 'var(--cyan-core)', fontSize: '1rem' }}>
+                              {cat.category}
+                            </span>
+                            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                              ({cat.skills.length} skills)
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <button
-                              onClick={() => {
-                                const updated = [...skills];
-                                updated[catIdx].skills.splice(sIdx, 1);
-                                setSkills(updated);
-                                saveItem(KEYS.SKILLS, updated);
-                              }}
-                              style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '0 2px' }}
-                              title="Delete skill"
+                              onClick={() => setAddingSkillModal({ catIndex: catIdx, name: '', level: 'Core' })}
+                              className="btn-cyan"
+                              style={{ padding: '5px 12px', fontSize: '0.74rem' }}
                             >
-                              <X size={12} />
+                              <Plus size={13} /> Add Skill Tag
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSkillCategory(catIdx)}
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                color: '#EF4444',
+                                borderRadius: '6px',
+                                padding: '5px 8px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.74rem'
+                              }}
+                              title="Delete this entire category"
+                            >
+                              <Trash2 size={13} />
                             </button>
                           </div>
-                        ))}
+                        </div>
+
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                          {cat.skills.map((skill, sIdx) => (
+                            <div
+                              key={skill.name + sIdx}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '5px 10px',
+                                borderRadius: '6px',
+                                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                fontSize: '0.78rem'
+                              }}
+                            >
+                              <span style={{ color: '#FFFFFF', fontWeight: 600 }}>{skill.name}</span>
+                              <span style={{ fontSize: '0.68rem', color: 'var(--cyan-core)' }}>({skill.level})</span>
+                              <button
+                                onClick={() => setAddingSkillModal({ catIndex: catIdx, skillIndex: sIdx, name: skill.name, level: skill.level })}
+                                style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer', padding: '0 2px' }}
+                                title="Edit skill tag"
+                              >
+                                <Edit size={11} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const updated = [...skills];
+                                  updated[catIdx].skills.splice(sIdx, 1);
+                                  setSkills(updated);
+                                  saveItem(KEYS.SKILLS, updated);
+                                }}
+                                style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '0 2px' }}
+                                title="Delete skill tag"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ))}
+                          {cat.skills.length === 0 && (
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                              No skills in this category yet. Click "+ Add Skill Tag" above to add.
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               ) : (
                 /* Soft Skills Subsection (6 Cards) */
@@ -3503,9 +3669,10 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
       {/* --- MODAL: EDIT PROJECT --- */}
       {editingProject && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(12px)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="glass-panel" style={{ maxWidth: '640px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '28px', border: '1px solid rgba(0, 240, 255, 0.3)' }}>
+          <div className="glass-panel" style={{ maxWidth: '680px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '28px', border: '1px solid rgba(0, 240, 255, 0.3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF' }}>
+              <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Zap size={20} color="var(--cyan-core)" />
                 {isNewProject ? 'Add New Project' : 'Edit Project'}
               </h3>
               <button onClick={() => setEditingProject(null)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>
@@ -3525,21 +3692,47 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                 />
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>CATEGORY</label>
-                <select
-                  value={editingProject.category}
-                  onChange={(e) => setEditingProject({ ...editingProject, category: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#070E20', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
-                >
-                  <option value="Software QA">Software QA</option>
-                  <option value="Web Development">Web Development</option>
-                  <option value="Vibe Code Using AI">Vibe Code Using AI</option>
-                </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>CATEGORY</label>
+                  <select
+                    value={editingProject.category}
+                    onChange={(e) => setEditingProject({ ...editingProject, category: e.target.value })}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#070E20', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
+                  >
+                    <option value="Software QA">Software QA</option>
+                    <option value="Web Development">Web Development</option>
+                    <option value="Vibe Code Using AI">Vibe Code Using AI</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>PROJECT STATUS</label>
+                  <select
+                    value={editingProject.status || 'Production Live'}
+                    onChange={(e) => setEditingProject({ ...editingProject, status: e.target.value as any })}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#070E20', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
+                  >
+                    <option value="Production Live">Production Live</option>
+                    <option value="Completed">Completed</option>
+                    <option value="In Progress">In Progress</option>
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>SUMMARY (CARD DISPLAY)</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.82rem', color: '#FCD34D' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!editingProject.featured}
+                    onChange={(e) => setEditingProject({ ...editingProject, featured: e.target.checked })}
+                    style={{ accentColor: '#F59E0B', width: '16px', height: '16px' }}
+                  />
+                  <span>Mark as Featured Project (Displays prominent "FEATURED" gold badge on card)</span>
+                </label>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>SUMMARY (DISPLAYED ON CARD)</label>
                 <textarea
                   rows={2}
                   value={editingProject.summary}
@@ -3550,29 +3743,139 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
               </div>
 
               <div>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>GITHUB URL</label>
-                <input
-                  type="url"
-                  value={editingProject.githubUrl}
-                  onChange={(e) => setEditingProject({ ...editingProject, githubUrl: e.target.value })}
+                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>DESCRIPTION (FULL MODAL OVERVIEW)</label>
+                <textarea
+                  rows={3}
+                  value={editingProject.description || ''}
+                  onChange={(e) => setEditingProject({ ...editingProject, description: e.target.value })}
+                  placeholder="Detailed breakdown of the architecture, algorithms, and key impact..."
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
-                  required
                 />
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>LIVE DEMO URL (OPTIONAL)</label>
-                <input
-                  type="url"
-                  value={editingProject.liveUrl || ''}
-                  onChange={(e) => setEditingProject({ ...editingProject, liveUrl: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
-                />
+              {/* TECHNOLOGIES BADGES (THE "SMALL BOXES"!) */}
+              <div style={{ backgroundColor: 'rgba(0, 240, 255, 0.04)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(0, 240, 255, 0.2)' }}>
+                <label style={{ fontSize: '0.8rem', color: 'var(--cyan-core)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Flame size={14} /> TECHNOLOGY TAGS (SMALL BADGE BOXES ON CARD)
+                </label>
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', margin: '4px 0 10px 0' }}>
+                  These render as the rounded pill badges on the project card (e.g. React 19, TypeScript, Vite, Python).
+                </p>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px', minHeight: '36px', padding: '8px', borderRadius: '6px', backgroundColor: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                  {(editingProject.technologies || []).length === 0 ? (
+                    <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>No technology badges added yet. Type below to add!</span>
+                  ) : (
+                    (editingProject.technologies || []).map((t, idx) => (
+                      <span
+                        key={idx}
+                        className="badge-tag"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 10px',
+                          fontSize: '0.78rem',
+                          backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                          border: '1px solid rgba(0, 240, 255, 0.3)'
+                        }}
+                      >
+                        <span style={{ color: '#FFFFFF' }}>{t}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveProjectTech(t)}
+                          style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+                          title={`Remove ${t}`}
+                        >
+                          <X size={13} />
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={projectTechInput}
+                    onChange={(e) => setProjectTechInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddProjectTech();
+                      }
+                    }}
+                    placeholder="Type technology (e.g. React 19, TypeScript) or comma-separated"
+                    style={{ flex: 1, padding: '9px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff', fontSize: '0.82rem' }}
+                  />
+                  <button type="button" onClick={handleAddProjectTech} className="btn-cyan" style={{ padding: '9px 16px', fontSize: '0.78rem' }}>
+                    <Plus size={14} /> Add Badge
+                  </button>
+                </div>
+              </div>
+
+              {/* KEY FEATURES BULLETS */}
+              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <label style={{ fontSize: '0.8rem', color: '#FFFFFF', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CheckCircle2 size={14} color="var(--cyan-core)" /> KEY FEATURES & HIGHLIGHTS
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', margin: '8px 0' }}>
+                  {(editingProject.features || []).map((feat, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', backgroundColor: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                      <CheckCircle2 size={13} color="var(--cyan-core)" style={{ flexShrink: 0 }} />
+                      <span style={{ flex: 1, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{feat}</span>
+                      <button type="button" onClick={() => handleRemoveProjectFeature(idx)} style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={projectFeatureInput}
+                    onChange={(e) => setProjectFeatureInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddProjectFeature();
+                      }
+                    }}
+                    placeholder="Type key feature highlight bullet and press Enter"
+                    style={{ flex: 1, padding: '9px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff', fontSize: '0.82rem' }}
+                  />
+                  <button type="button" onClick={handleAddProjectFeature} className="btn-cyan" style={{ padding: '9px 16px', fontSize: '0.78rem' }}>
+                    <Plus size={14} /> Add Feature
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>GITHUB URL</label>
+                  <input
+                    type="url"
+                    value={editingProject.githubUrl}
+                    onChange={(e) => setEditingProject({ ...editingProject, githubUrl: e.target.value })}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>LIVE DEMO URL (OPTIONAL)</label>
+                  <input
+                    type="url"
+                    value={editingProject.liveUrl || ''}
+                    onChange={(e) => setEditingProject({ ...editingProject, liveUrl: e.target.value })}
+                    placeholder="https://..."
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
+                  />
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                 <button type="submit" className="btn-cyan" style={{ flex: 1, justifyContent: 'center' }}>
-                  <Check size={16} /> Save Project
+                  <Check size={16} /> Save Project & Badges
                 </button>
                 <button type="button" onClick={() => setEditingProject(null)} className="btn-glass">
                   Cancel
@@ -3586,9 +3889,10 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
       {/* --- MODAL: EDIT EXPERIENCE --- */}
       {editingExperience && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(12px)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="glass-panel" style={{ maxWidth: '640px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '28px', border: '1px solid rgba(0, 240, 255, 0.3)' }}>
+          <div className="glass-panel" style={{ maxWidth: '680px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '28px', border: '1px solid rgba(0, 240, 255, 0.3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF' }}>
+              <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Award size={20} color="var(--cyan-core)" />
                 {isNewExperience ? 'Add Career Position' : 'Edit Position'}
               </h3>
               <button onClick={() => setEditingExperience(null)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>
@@ -3627,6 +3931,7 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                     type="text"
                     value={editingExperience.startDate}
                     onChange={(e) => setEditingExperience({ ...editingExperience, startDate: e.target.value })}
+                    placeholder="e.g. June 2024"
                     style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
                     required
                   />
@@ -3637,6 +3942,7 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                     type="text"
                     value={editingExperience.endDate}
                     onChange={(e) => setEditingExperience({ ...editingExperience, endDate: e.target.value })}
+                    placeholder="e.g. Present"
                     style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
                     required
                   />
@@ -3661,14 +3967,112 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                   type="text"
                   value={editingExperience.location}
                   onChange={(e) => setEditingExperience({ ...editingExperience, location: e.target.value })}
+                  placeholder="e.g. Kota, Rajasthan / Remote"
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
                   required
                 />
               </div>
 
+              {/* TECHNOLOGIES USED (THE "SMALL BOXES"!) */}
+              <div style={{ backgroundColor: 'rgba(0, 240, 255, 0.04)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(0, 240, 255, 0.2)' }}>
+                <label style={{ fontSize: '0.8rem', color: 'var(--cyan-core)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Flame size={14} /> TECHNOLOGIES USED (SMALL BADGE BOXES ON TIMELINE)
+                </label>
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', margin: '4px 0 10px 0' }}>
+                  Tools & technologies applied during this role (e.g. Selenium, TestNG, Rest Assured, Jira, React).
+                </p>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px', minHeight: '36px', padding: '8px', borderRadius: '6px', backgroundColor: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                  {(editingExperience.technologies || []).length === 0 ? (
+                    <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>No technology badges added yet. Type below to add!</span>
+                  ) : (
+                    (editingExperience.technologies || []).map((t, idx) => (
+                      <span
+                        key={idx}
+                        className="badge-tag"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 10px',
+                          fontSize: '0.78rem',
+                          backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                          border: '1px solid rgba(0, 240, 255, 0.3)'
+                        }}
+                      >
+                        <span style={{ color: '#FFFFFF' }}>{t}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveExpTech(t)}
+                          style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+                          title={`Remove ${t}`}
+                        >
+                          <X size={13} />
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={expTechInput}
+                    onChange={(e) => setExpTechInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddExpTech();
+                      }
+                    }}
+                    placeholder="Type technology (e.g. Selenium, TestNG, Jira) or comma-separated"
+                    style={{ flex: 1, padding: '9px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff', fontSize: '0.82rem' }}
+                  />
+                  <button type="button" onClick={handleAddExpTech} className="btn-cyan" style={{ padding: '9px 16px', fontSize: '0.78rem' }}>
+                    <Plus size={14} /> Add Badge
+                  </button>
+                </div>
+              </div>
+
+              {/* RESPONSIBILITIES BULLETS */}
+              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <label style={{ fontSize: '0.8rem', color: '#FFFFFF', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CheckCircle2 size={14} color="var(--cyan-core)" /> KEY RESPONSIBILITIES (BULLET POINTS)
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', margin: '8px 0' }}>
+                  {(editingExperience.responsibilities || []).map((resp, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', backgroundColor: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                      <CheckCircle2 size={13} color="var(--cyan-core)" style={{ flexShrink: 0 }} />
+                      <span style={{ flex: 1, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{resp}</span>
+                      <button type="button" onClick={() => handleRemoveExpResp(idx)} style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={expRespInput}
+                    onChange={(e) => setExpRespInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddExpResp();
+                      }
+                    }}
+                    placeholder="Type responsibility bullet (e.g. Conducted automated regression testing with 98% pass rate)"
+                    style={{ flex: 1, padding: '9px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff', fontSize: '0.82rem' }}
+                  />
+                  <button type="button" onClick={handleAddExpResp} className="btn-cyan" style={{ padding: '9px 16px', fontSize: '0.78rem' }}>
+                    <Plus size={14} /> Add Bullet
+                  </button>
+                </div>
+              </div>
+
               <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                 <button type="submit" className="btn-cyan" style={{ flex: 1, justifyContent: 'center' }}>
-                  <Check size={16} /> Save Position
+                  <Check size={16} /> Save Position & Badges
                 </button>
                 <button type="button" onClick={() => setEditingExperience(null)} className="btn-glass">
                   Cancel
@@ -3684,7 +4088,8 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(12px)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="glass-panel" style={{ maxWidth: '580px', width: '100%', padding: '28px', border: '1px solid rgba(0, 240, 255, 0.3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF' }}>
+              <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Award size={20} color="var(--cyan-core)" />
                 {isNewAchievement ? 'Add Entry' : 'Edit Entry'}
               </h3>
               <button onClick={() => setEditingAchievement(null)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>
@@ -3704,15 +4109,27 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                 />
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>ORGANIZATION / ISSUER</label>
-                <input
-                  type="text"
-                  value={editingAchievement.organization}
-                  onChange={(e) => setEditingAchievement({ ...editingAchievement, organization: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
-                  required
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>ORGANIZATION / ISSUER</label>
+                  <input
+                    type="text"
+                    value={editingAchievement.organization}
+                    onChange={(e) => setEditingAchievement({ ...editingAchievement, organization: e.target.value })}
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>YEAR / DATE (OPTIONAL)</label>
+                  <input
+                    type="text"
+                    value={editingAchievement.date || ''}
+                    onChange={(e) => setEditingAchievement({ ...editingAchievement, date: e.target.value })}
+                    placeholder="e.g. 2025 or Dec 2024"
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
+                  />
+                </div>
               </div>
 
               <div>
@@ -3757,7 +4174,8 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(12px)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div className="glass-panel" style={{ maxWidth: '500px', width: '100%', padding: '28px', border: '1px solid rgba(0, 240, 255, 0.3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF' }}>
+              <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Zap size={20} color="var(--cyan-core)" />
                 {isNewSoftSkill ? 'Add Soft Skill Card' : 'Edit Soft Skill Card'}
               </h3>
               <button onClick={() => setEditingSoftSkill(null)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>
@@ -3806,9 +4224,10 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
       {/* --- MODAL: EDIT EDUCATION --- */}
       {editingEducation && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(12px)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="glass-panel" style={{ maxWidth: '600px', width: '100%', padding: '28px', border: '1px solid rgba(0, 240, 255, 0.3)' }}>
+          <div className="glass-panel" style={{ maxWidth: '640px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '28px', border: '1px solid rgba(0, 240, 255, 0.3)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF' }}>
+              <h3 style={{ fontSize: '1.25rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <GraduationCap size={20} color="var(--cyan-core)" />
                 {isNewEducation ? 'Add Degree' : 'Edit Degree'}
               </h3>
               <button onClick={() => setEditingEducation(null)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>
@@ -3823,20 +4242,35 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                   type="text"
                   value={editingEducation.degree}
                   onChange={(e) => setEditingEducation({ ...editingEducation, degree: e.target.value })}
+                  placeholder="e.g. Bachelor of Technology in Computer Science"
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
                   required
                 />
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>INSTITUTION</label>
-                <input
-                  type="text"
-                  value={editingEducation.institution}
-                  onChange={(e) => setEditingEducation({ ...editingEducation, institution: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
-                  required
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>INSTITUTION</label>
+                  <input
+                    type="text"
+                    value={editingEducation.institution}
+                    onChange={(e) => setEditingEducation({ ...editingEducation, institution: e.target.value })}
+                    placeholder="e.g. Rajasthan Technical University"
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>LOCATION</label>
+                  <input
+                    type="text"
+                    value={editingEducation.location}
+                    onChange={(e) => setEditingEducation({ ...editingEducation, location: e.target.value })}
+                    placeholder="e.g. Kota, Rajasthan, India"
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
+                    required
+                  />
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -3846,6 +4280,7 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                     type="text"
                     value={editingEducation.grade}
                     onChange={(e) => setEditingEducation({ ...editingEducation, grade: e.target.value })}
+                    placeholder="e.g. 8.5"
                     style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
                     required
                   />
@@ -3870,6 +4305,7 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                     type="text"
                     value={editingEducation.startDate}
                     onChange={(e) => setEditingEducation({ ...editingEducation, startDate: e.target.value })}
+                    placeholder="e.g. 2021"
                     style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
                     required
                   />
@@ -3880,10 +4316,22 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                     type="text"
                     value={editingEducation.endDate}
                     onChange={(e) => setEditingEducation({ ...editingEducation, endDate: e.target.value })}
+                    placeholder="e.g. 2025"
                     style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
                     required
                   />
                 </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>FIELD OF STUDY / DESCRIPTION (OPTIONAL)</label>
+                <textarea
+                  rows={2}
+                  value={editingEducation.description || ''}
+                  onChange={(e) => setEditingEducation({ ...editingEducation, description: e.target.value })}
+                  placeholder="e.g. Core coursework in Data Structures, QA Test Automation, and Full Stack Engineering"
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
+                />
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
@@ -3891,6 +4339,98 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                   <Check size={16} /> Save Degree
                 </button>
                 <button type="button" onClick={() => setEditingEducation(null)} className="btn-glass">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: ADD SKILL CATEGORY --- */}
+      {showAddSkillCategoryModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(12px)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="glass-panel" style={{ maxWidth: '480px', width: '100%', padding: '28px', border: '1px solid rgba(0, 240, 255, 0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '1.2rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Plus size={18} color="var(--cyan-core)" /> Add New Skill Category
+              </h3>
+              <button onClick={() => setShowAddSkillCategoryModal(false)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); handleAddSkillCategory(); }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>CATEGORY NAME</label>
+                <input
+                  type="text"
+                  value={newSkillCategoryName}
+                  onChange={(e) => setNewSkillCategoryName(e.target.value)}
+                  placeholder="e.g. Cloud & DevOps, Mobile Testing, AI Tools"
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
+                  required
+                  autoFocus
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                <button type="submit" className="btn-cyan" style={{ flex: 1, justifyContent: 'center' }}>
+                  <Check size={16} /> Create Category
+                </button>
+                <button type="button" onClick={() => setShowAddSkillCategoryModal(false)} className="btn-glass">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: ADD / EDIT SKILL ITEM (NAME + PROFICIENCY LEVEL) --- */}
+      {addingSkillModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(12px)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="glass-panel" style={{ maxWidth: '480px', width: '100%', padding: '28px', border: '1px solid rgba(0, 240, 255, 0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '1.2rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Zap size={18} color="var(--cyan-core)" />
+                {addingSkillModal.skillIndex !== undefined ? 'Edit Skill Item' : `Add Skill to ${skills[addingSkillModal.catIndex]?.category || ''}`}
+              </h3>
+              <button onClick={() => setAddingSkillModal(null)} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveSkillModal} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>SKILL NAME</label>
+                <input
+                  type="text"
+                  value={addingSkillModal.name}
+                  onChange={(e) => setAddingSkillModal({ ...addingSkillModal, name: e.target.value })}
+                  placeholder="e.g. Selenium WebDriver, React 19, Postman"
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
+                  required
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>PROFICIENCY LEVEL / TAG</label>
+                <select
+                  value={addingSkillModal.level}
+                  onChange={(e) => setAddingSkillModal({ ...addingSkillModal, level: e.target.value })}
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', backgroundColor: '#070E20', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
+                >
+                  <option value="Core">Core</option>
+                  <option value="Advanced">Advanced</option>
+                  <option value="Expert">Expert</option>
+                  <option value="Automation">Automation</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Familiar">Familiar</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                <button type="submit" className="btn-cyan" style={{ flex: 1, justifyContent: 'center' }}>
+                  <Check size={16} /> Save Skill
+                </button>
+                <button type="button" onClick={() => setAddingSkillModal(null)} className="btn-glass">
                   Cancel
                 </button>
               </div>
