@@ -119,14 +119,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [authMode, setAuthMode] = useState<'login' | 'forgot' | 'reset'>('login');
 
   // Login form state
-  const [loginEmail, setLoginEmail] = useState(adminCredentials.email || 'bhaveshgupta1308@gmail.com');
+  const [loginEmail, setLoginEmail] = useState(adminCredentials.email || 'bhaveshgupta901@gmail.com');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Forgot Password state
-  const [forgotEmail, setForgotEmail] = useState(adminCredentials.email || 'bhaveshgupta1308@gmail.com');
+  const [forgotEmail, setForgotEmail] = useState(adminCredentials.email || 'bhaveshgupta901@gmail.com');
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState('');
   const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
@@ -141,7 +141,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [resetSuccess, setResetSuccess] = useState('');
 
   // Account Settings inside Admin Panel - Old-to-New Password Verification & Update
-  const [oldCredEmail, setOldCredEmail] = useState(adminCredentials.email || 'bhaveshgupta1308@gmail.com');
+  const [oldCredEmail, setOldCredEmail] = useState(adminCredentials.email || 'bhaveshgupta901@gmail.com');
   const [oldPasswordInput, setOldPasswordInput] = useState('');
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [isOldVerified, setIsOldVerified] = useState(false);
@@ -149,7 +149,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [verifyOldError, setVerifyOldError] = useState<string | null>(null);
 
   // New Password generation fields (strictly locked until old credentials verified)
-  const [newAdminEmail, setNewAdminEmail] = useState(adminCredentials.email || 'bhaveshgupta1308@gmail.com');
+  const [newAdminEmail, setNewAdminEmail] = useState(adminCredentials.email || 'bhaveshgupta901@gmail.com');
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [newAdminConfirmPassword, setNewAdminConfirmPassword] = useState('');
   const [showNewAdminPassword, setShowNewAdminPassword] = useState(false);
@@ -793,8 +793,8 @@ CREATE TABLE IF NOT EXISTS admin_auth (
 
 -- Initial seed for admin_auth
 INSERT INTO admin_auth (id, email, password)
-VALUES ('admin_primary', 'bhaveshgupta1308@gmail.com', 'Admin@Secure2026')
-ON CONFLICT (id) DO NOTHING;
+VALUES ('admin_primary', 'bhaveshgupta901@gmail.com', 'Admin@Secure2026')
+ON CONFLICT (id) DO UPDATE SET email = 'bhaveshgupta901@gmail.com';
 
 -- 4. Password Reset Tokens Table (Stores Password Reset Requests in Supabase)
 CREATE TABLE IF NOT EXISTS admin_password_resets (
@@ -894,7 +894,7 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                       type="email"
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="bhaveshgupta1308@gmail.com"
+                      placeholder="bhaveshgupta901@gmail.com"
                       style={{
                         width: '100%',
                         padding: '12px 14px 12px 38px',
@@ -1035,7 +1035,7 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                   <button
                     type="button"
                     onClick={() => {
-                      setLoginEmail('bhaveshgupta1308@gmail.com');
+                      setLoginEmail('bhaveshgupta901@gmail.com');
                       setLoginPassword('Admin@123');
                     }}
                     style={{
@@ -1115,7 +1115,7 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                         type="email"
                         value={forgotEmail}
                         onChange={(e) => setForgotEmail(e.target.value)}
-                        placeholder="bhaveshgupta1308@gmail.com"
+                        placeholder="bhaveshgupta901@gmail.com"
                         style={{
                           width: '100%',
                           padding: '12px 14px 12px 38px',
@@ -3142,7 +3142,7 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                           type="email"
                           value={oldCredEmail}
                           onChange={(e) => setOldCredEmail(e.target.value)}
-                          placeholder="bhaveshgupta1308@gmail.com"
+                          placeholder="bhaveshgupta901@gmail.com"
                           style={{ width: '100%', padding: '10px 14px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
                           required
                         />
@@ -3222,7 +3222,7 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                         type="email"
                         value={newAdminEmail}
                         onChange={(e) => setNewAdminEmail(e.target.value)}
-                        placeholder="bhaveshgupta1308@gmail.com"
+                        placeholder="bhaveshgupta901@gmail.com"
                         style={{ width: '100%', padding: '10px 14px', borderRadius: '6px', backgroundColor: 'var(--bg-glass-input)', border: '1px solid rgba(0, 240, 255, 0.2)', color: '#fff' }}
                         required
                       />

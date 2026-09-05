@@ -49,8 +49,18 @@ export interface ResetTokenData {
 }
 
 export const defaultAdminCredentials: AdminCredentials = {
-  email: 'bhaveshgupta1308@gmail.com',
-  password: 'Admin@123'
+  email: 'bhaveshgupta901@gmail.com',
+  password: 'Admin@Secure2026'
+};
+
+export const isRegisteredAdminEmail = (inputEmail: string, currentEmail: string): boolean => {
+  const normInput = inputEmail.trim().toLowerCase();
+  const normCurrent = currentEmail.trim().toLowerCase();
+  if (normInput === normCurrent) return true;
+  if (normInput === 'bhaveshgupta901@gmail.com' || normInput === 'bhaveshgupta1308@gmail.com') {
+    return normCurrent === 'bhaveshgupta901@gmail.com' || normCurrent === 'bhaveshgupta1308@gmail.com';
+  }
+  return false;
 };
 
 export const getAdminCredentials = (): AdminCredentials => {
@@ -59,6 +69,10 @@ export const getAdminCredentials = (): AdminCredentials => {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed.email && parsed.password) {
+        if (parsed.email.toLowerCase() === 'bhaveshgupta1308@gmail.com') {
+          parsed.email = 'bhaveshgupta901@gmail.com';
+          localStorage.setItem(KEYS.ADMIN_CREDENTIALS, JSON.stringify(parsed));
+        }
         return parsed;
       }
     }
@@ -143,8 +157,8 @@ export const verifyAdminLogin = async (
   const inputEmail = email.trim().toLowerCase();
   const regEmail = creds.email.trim().toLowerCase();
 
-  // STRICT CHECK: Only exact registered email and exact active password match!
-  if (inputEmail === regEmail && pass === creds.password) {
+  // STRICT CHECK: Matches registered admin email and exact active password
+  if (isRegisteredAdminEmail(inputEmail, regEmail) && pass === creds.password) {
     return { success: true };
   }
 
@@ -180,7 +194,7 @@ export const verifyOldCredentials = async (
   const inputEmail = email.trim().toLowerCase();
   const regEmail = creds.email.trim().toLowerCase();
 
-  if (inputEmail !== regEmail) {
+  if (!isRegisteredAdminEmail(inputEmail, regEmail)) {
     return {
       success: false,
       message: `Email "${email}" does not match the registered admin email (${creds.email}).`
@@ -258,10 +272,10 @@ export const requestPasswordReset = async (
   const normalizedInput = email.trim().toLowerCase();
   const registeredEmail = creds.email.trim().toLowerCase();
 
-  if (normalizedInput !== registeredEmail) {
+  if (!isRegisteredAdminEmail(normalizedInput, registeredEmail)) {
     return {
       success: false,
-      message: `Email "${email}" is not registered to this admin account. Please provide your registered admin Gmail.`
+      message: `Email "${email}" is not registered to this admin account. Please provide your registered admin Gmail (${creds.email}).`
     };
   }
 
