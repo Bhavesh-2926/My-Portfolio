@@ -73,7 +73,11 @@ import {
   ArrowLeft,
   Send,
   Lock,
-  Unlock
+  Unlock,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  Move
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -268,6 +272,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [showAddSkillCategoryModal, setShowAddSkillCategoryModal] = useState(false);
   const [newSkillCategoryName, setNewSkillCategoryName] = useState('');
   const [addingSkillModal, setAddingSkillModal] = useState<{ catIndex: number; skillIndex?: number; name: string; level: string } | null>(null);
+
+  // Drag-and-Drop Reordering state across all sections
+  const [draggedItem, setDraggedItem] = useState<{ section: string; index: number; subIndex?: number } | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<{ section: string; index: number; subIndex?: number } | null>(null);
 
   // Search & Filter in Messages
   const [messageFilter, setMessageFilter] = useState<'all' | 'unread' | 'read'>('all');
@@ -809,6 +817,84 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setSkills(updated);
     saveItem(KEYS.SKILLS, updated);
     setAddingSkillModal(null);
+  };
+
+  // --- REORDER & DRAG-AND-DROP UTILITY AND HANDLERS ---
+  const reorderArray = <T,>(list: T[], startIndex: number, endIndex: number): T[] => {
+    if (startIndex === endIndex || startIndex < 0 || endIndex < 0 || startIndex >= list.length || endIndex >= list.length) {
+      return list;
+    }
+    const result = [...list];
+    const [removed] = result.splice(startIndex, 1);
+    result.splice(endIndex, 0, removed);
+    return result;
+  };
+
+  const handleReorderProjects = (fromIndex: number, toIndex: number) => {
+    const updated = reorderArray(projects, fromIndex, toIndex);
+    setProjects(updated);
+    saveItem(KEYS.PROJECTS, updated);
+  };
+
+  const handleReorderExperiences = (fromIndex: number, toIndex: number) => {
+    const updated = reorderArray(experiences, fromIndex, toIndex);
+    setExperiences(updated);
+    saveItem(KEYS.EXPERIENCES, updated);
+  };
+
+  const handleReorderEducation = (fromIndex: number, toIndex: number) => {
+    const updated = reorderArray(education, fromIndex, toIndex);
+    setEducation(updated);
+    saveItem(KEYS.EDUCATION, updated);
+  };
+
+  const handleReorderAchievements = (fromIndex: number, toIndex: number) => {
+    const updated = reorderArray(achievements, fromIndex, toIndex);
+    setAchievements(updated);
+    saveItem(KEYS.ACHIEVEMENTS, updated);
+  };
+
+  const handleReorderCertifications = (fromCertIndex: number, toCertIndex: number) => {
+    const certs = achievements.filter((a) => a.type === 'Certification');
+    if (fromCertIndex === toCertIndex || fromCertIndex < 0 || toCertIndex < 0 || fromCertIndex >= certs.length || toCertIndex >= certs.length) return;
+    const fromItem = certs[fromCertIndex];
+    const toItem = certs[toCertIndex];
+    const realFrom = achievements.findIndex((a) => a.id === fromItem.id);
+    const realTo = achievements.findIndex((a) => a.id === toItem.id);
+    if (realFrom !== -1 && realTo !== -1) {
+      handleReorderAchievements(realFrom, realTo);
+    }
+  };
+
+  const handleReorderLeadershipAchievements = (fromIndex: number, toIndex: number) => {
+    const list = achievements.filter((a) => a.type !== 'Certification');
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= list.length || toIndex >= list.length) return;
+    const fromItem = list[fromIndex];
+    const toItem = list[toIndex];
+    const realFrom = achievements.findIndex((a) => a.id === fromItem.id);
+    const realTo = achievements.findIndex((a) => a.id === toItem.id);
+    if (realFrom !== -1 && realTo !== -1) {
+      handleReorderAchievements(realFrom, realTo);
+    }
+  };
+
+  const handleReorderSoftSkills = (fromIndex: number, toIndex: number) => {
+    const updated = reorderArray(softSkills, fromIndex, toIndex);
+    setSoftSkills(updated);
+    saveItem(KEYS.SOFT_SKILLS, updated);
+  };
+
+  const handleReorderSkillCategories = (fromIndex: number, toIndex: number) => {
+    const updated = reorderArray(skills, fromIndex, toIndex);
+    setSkills(updated);
+    saveItem(KEYS.SKILLS, updated);
+  };
+
+  const handleReorderSkillItems = (catIndex: number, fromIndex: number, toIndex: number) => {
+    const updated = [...skills];
+    updated[catIndex].skills = reorderArray(updated[catIndex].skills, fromIndex, toIndex);
+    setSkills(updated);
+    saveItem(KEYS.SKILLS, updated);
   };
 
   // Messages CRUD & Supabase Sync
@@ -2470,37 +2556,140 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
                     {achievements
                       .filter((a) => a.type !== 'Certification')
-                      .map((ach) => (
-                        <div key={ach.id} className="glass-card" style={{ padding: '20px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                            <span className="badge-neon" style={{ fontSize: '0.7rem' }}>{ach.type}</span>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <button
-                                onClick={() => {
-                                  setEditingAchievement(ach);
-                                  setIsNewAchievement(false);
-                                }}
-                                style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer' }}
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteAchievement(ach.id)}
-                                style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                      .map((ach, aIdx) => {
+                        const isDragging = draggedItem?.section === 'about-achievements' && draggedItem.index === aIdx;
+                        const isDragOver = dragOverItem?.section === 'about-achievements' && dragOverItem.index === aIdx;
+                        const totalNonCerts = achievements.filter((a) => a.type !== 'Certification').length;
+                        return (
+                          <div
+                            key={ach.id}
+                            className="glass-card"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', '');
+                              setDraggedItem({ section: 'about-achievements', index: aIdx });
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'move';
+                            }}
+                            onDragEnter={() => setDragOverItem({ section: 'about-achievements', index: aIdx })}
+                            onDragLeave={() => {
+                              if (dragOverItem?.section === 'about-achievements' && dragOverItem?.index === aIdx) {
+                                setDragOverItem(null);
+                              }
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              if (draggedItem && draggedItem.section === 'about-achievements' && draggedItem.index !== aIdx) {
+                                handleReorderLeadershipAchievements(draggedItem.index, aIdx);
+                              }
+                              setDraggedItem(null);
+                              setDragOverItem(null);
+                            }}
+                            onDragEnd={() => {
+                              setDraggedItem(null);
+                              setDragOverItem(null);
+                            }}
+                            style={{
+                              padding: '20px',
+                              opacity: isDragging ? 0.35 : 1,
+                              border: isDragOver ? '2px dashed #00F0FF' : '1px solid rgba(0, 240, 255, 0.2)',
+                              boxShadow: isDragOver ? '0 0 24px rgba(0, 240, 255, 0.4)' : undefined,
+                              cursor: 'grab',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <div
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    padding: '3px 7px',
+                                    borderRadius: '5px',
+                                    backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                                    border: '1px solid rgba(0, 240, 255, 0.3)',
+                                    color: 'var(--cyan-core)',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700
+                                  }}
+                                  title="Drag and drop to reorder"
+                                >
+                                  <GripVertical size={13} />
+                                  <span>#{aIdx + 1}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleReorderLeadershipAchievements(aIdx, aIdx - 1)}
+                                  disabled={aIdx === 0}
+                                  style={{
+                                    background: 'transparent',
+                                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                                    borderRadius: '4px',
+                                    color: aIdx === 0 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                    cursor: aIdx === 0 ? 'not-allowed' : 'pointer',
+                                    padding: '2px 5px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center'
+                                  }}
+                                  title="Move achievement up"
+                                >
+                                  <ArrowUp size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleReorderLeadershipAchievements(aIdx, aIdx + 1)}
+                                  disabled={aIdx === totalNonCerts - 1}
+                                  style={{
+                                    background: 'transparent',
+                                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                                    borderRadius: '4px',
+                                    color: aIdx === totalNonCerts - 1 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                    cursor: aIdx === totalNonCerts - 1 ? 'not-allowed' : 'pointer',
+                                    padding: '2px 5px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center'
+                                  }}
+                                  title="Move achievement down"
+                                >
+                                  <ArrowDown size={12} />
+                                </button>
+                                <span className="badge-neon" style={{ fontSize: '0.7rem' }}>{ach.type}</span>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                  onClick={() => {
+                                    setEditingAchievement(ach);
+                                    setIsNewAchievement(false);
+                                  }}
+                                  style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer' }}
+                                  title="Edit achievement"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteAchievement(ach.id)}
+                                  style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}
+                                  title="Delete achievement"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
                             </div>
+
+                            <h4 style={{ fontSize: '1.05rem', color: '#FFFFFF', marginBottom: '4px' }}>{ach.title}</h4>
+                            <div style={{ fontSize: '0.82rem', color: 'var(--cyan-core)', fontWeight: 600, marginBottom: '8px' }}>
+                              {ach.organization}
+                            </div>
+                            <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                              {ach.description}
+                            </p>
                           </div>
-                          <h4 style={{ fontSize: '1.05rem', color: '#FFFFFF', marginBottom: '4px' }}>{ach.title}</h4>
-                          <div style={{ fontSize: '0.82rem', color: 'var(--cyan-core)', fontWeight: 600, marginBottom: '8px' }}>
-                            {ach.organization}
-                          </div>
-                          <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                            {ach.description}
-                          </p>
-                        </div>
-                      ))}
+                        );
+                      })}
                   </div>
                 </div>
               )}
@@ -2571,92 +2760,246 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-                    {skills.map((cat, catIdx) => (
-                      <div key={cat.category} className="glass-card" style={{ padding: '20px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontWeight: 700, color: 'var(--cyan-core)', fontSize: '1rem' }}>
-                              {cat.category}
-                            </span>
-                            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                              ({cat.skills.length} skills)
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <button
-                              onClick={() => setAddingSkillModal({ catIndex: catIdx, name: '', level: 'Core' })}
-                              className="btn-cyan"
-                              style={{ padding: '5px 12px', fontSize: '0.74rem' }}
-                            >
-                              <Plus size={13} /> Add Skill Tag
-                            </button>
-                            <button
-                              onClick={() => handleDeleteSkillCategory(catIdx)}
-                              style={{
-                                background: 'rgba(239, 68, 68, 0.1)',
-                                border: '1px solid rgba(239, 68, 68, 0.3)',
-                                color: '#EF4444',
-                                borderRadius: '6px',
-                                padding: '5px 8px',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.74rem'
-                              }}
-                              title="Delete this entire category"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                          {cat.skills.map((skill, sIdx) => (
-                            <div
-                              key={skill.name + sIdx}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '5px 10px',
-                                borderRadius: '6px',
-                                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                fontSize: '0.78rem'
-                              }}
-                            >
-                              <span style={{ color: '#FFFFFF', fontWeight: 600 }}>{skill.name}</span>
-                              <span style={{ fontSize: '0.68rem', color: 'var(--cyan-core)' }}>({skill.level})</span>
-                              <button
-                                onClick={() => setAddingSkillModal({ catIndex: catIdx, skillIndex: sIdx, name: skill.name, level: skill.level })}
-                                style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer', padding: '0 2px' }}
-                                title="Edit skill tag"
+                    {skills.map((cat, catIdx) => {
+                      const isCatDragging = draggedItem?.section === 'skill-category' && draggedItem.index === catIdx;
+                      const isCatDragOver = dragOverItem?.section === 'skill-category' && dragOverItem.index === catIdx;
+                      return (
+                        <div
+                          key={cat.category}
+                          className="glass-card"
+                          draggable
+                          onDragStart={(e) => {
+                            // Only trigger category drag if not dragging a child skill tag
+                            if ((e.target as HTMLElement).closest('.draggable-skill-tag')) return;
+                            e.dataTransfer.setData('text/plain', '');
+                            setDraggedItem({ section: 'skill-category', index: catIdx });
+                          }}
+                          onDragOver={(e) => {
+                            if (draggedItem?.section === 'skill-category') {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'move';
+                            }
+                          }}
+                          onDragEnter={() => {
+                            if (draggedItem?.section === 'skill-category') {
+                              setDragOverItem({ section: 'skill-category', index: catIdx });
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (dragOverItem?.section === 'skill-category' && dragOverItem?.index === catIdx) {
+                              setDragOverItem(null);
+                            }
+                          }}
+                          onDrop={(e) => {
+                            if (draggedItem?.section === 'skill-category') {
+                              e.preventDefault();
+                              if (draggedItem.index !== catIdx) {
+                                handleReorderSkillCategories(draggedItem.index, catIdx);
+                              }
+                              setDraggedItem(null);
+                              setDragOverItem(null);
+                            }
+                          }}
+                          onDragEnd={() => {
+                            setDraggedItem(null);
+                            setDragOverItem(null);
+                          }}
+                          style={{
+                            padding: '20px',
+                            opacity: isCatDragging ? 0.35 : 1,
+                            border: isCatDragOver ? '2px dashed #00F0FF' : '1px solid rgba(0, 240, 255, 0.2)',
+                            boxShadow: isCatDragOver ? '0 0 24px rgba(0, 240, 255, 0.4)' : undefined,
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  padding: '3px 7px',
+                                  borderRadius: '5px',
+                                  backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                                  border: '1px solid rgba(0, 240, 255, 0.3)',
+                                  color: 'var(--cyan-core)',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  cursor: 'grab'
+                                }}
+                                title="Drag to reorder category"
                               >
-                                <Edit size={11} />
+                                <GripVertical size={13} />
+                                <span>#{catIdx + 1}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleReorderSkillCategories(catIdx, catIdx - 1)}
+                                disabled={catIdx === 0}
+                                style={{
+                                  background: 'transparent',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  borderRadius: '4px',
+                                  color: catIdx === 0 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                  cursor: catIdx === 0 ? 'not-allowed' : 'pointer',
+                                  padding: '2px 5px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                                title="Move category up"
+                              >
+                                <ArrowUp size={12} />
                               </button>
                               <button
-                                onClick={() => {
-                                  const updated = [...skills];
-                                  updated[catIdx].skills.splice(sIdx, 1);
-                                  setSkills(updated);
-                                  saveItem(KEYS.SKILLS, updated);
+                                type="button"
+                                onClick={() => handleReorderSkillCategories(catIdx, catIdx + 1)}
+                                disabled={catIdx === skills.length - 1}
+                                style={{
+                                  background: 'transparent',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  borderRadius: '4px',
+                                  color: catIdx === skills.length - 1 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                  cursor: catIdx === skills.length - 1 ? 'not-allowed' : 'pointer',
+                                  padding: '2px 5px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
                                 }}
-                                style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '0 2px' }}
-                                title="Delete skill tag"
+                                title="Move category down"
                               >
-                                <X size={12} />
+                                <ArrowDown size={12} />
+                              </button>
+
+                              <span style={{ fontWeight: 700, color: 'var(--cyan-core)', fontSize: '1rem' }}>
+                                {cat.category}
+                              </span>
+                              <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                                ({cat.skills.length} skills)
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <button
+                                onClick={() => setAddingSkillModal({ catIndex: catIdx, name: '', level: 'Core' })}
+                                className="btn-cyan"
+                                style={{ padding: '5px 12px', fontSize: '0.74rem' }}
+                              >
+                                <Plus size={13} /> Add Skill Tag
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSkillCategory(catIdx)}
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.1)',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  color: '#EF4444',
+                                  borderRadius: '6px',
+                                  padding: '5px 8px',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  fontSize: '0.74rem'
+                                }}
+                                title="Delete this entire category"
+                              >
+                                <Trash2 size={13} />
                               </button>
                             </div>
-                          ))}
-                          {cat.skills.length === 0 && (
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                              No skills in this category yet. Click "+ Add Skill Tag" above to add.
-                            </span>
-                          )}
+                          </div>
+
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {cat.skills.map((skill, sIdx) => {
+                              const isSkillDragging = draggedItem?.section === 'skill-item' && draggedItem.index === catIdx && draggedItem.subIndex === sIdx;
+                              const isSkillDragOver = dragOverItem?.section === 'skill-item' && dragOverItem.index === catIdx && dragOverItem.subIndex === sIdx;
+                              return (
+                                <div
+                                  key={skill.name + sIdx}
+                                  className="draggable-skill-tag"
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.stopPropagation();
+                                    e.dataTransfer.setData('text/plain', '');
+                                    setDraggedItem({ section: 'skill-item', index: catIdx, subIndex: sIdx });
+                                  }}
+                                  onDragOver={(e) => {
+                                    if (draggedItem?.section === 'skill-item' && draggedItem.index === catIdx) {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      e.dataTransfer.dropEffect = 'move';
+                                    }
+                                  }}
+                                  onDragEnter={(e) => {
+                                    if (draggedItem?.section === 'skill-item' && draggedItem.index === catIdx) {
+                                      e.stopPropagation();
+                                      setDragOverItem({ section: 'skill-item', index: catIdx, subIndex: sIdx });
+                                    }
+                                  }}
+                                  onDragLeave={(e) => {
+                                    e.stopPropagation();
+                                    if (dragOverItem?.section === 'skill-item' && dragOverItem?.index === catIdx && dragOverItem?.subIndex === sIdx) {
+                                      setDragOverItem(null);
+                                    }
+                                  }}
+                                  onDrop={(e) => {
+                                    e.stopPropagation();
+                                    if (draggedItem?.section === 'skill-item' && draggedItem.index === catIdx && draggedItem.subIndex !== undefined && draggedItem.subIndex !== sIdx) {
+                                      e.preventDefault();
+                                      handleReorderSkillItems(catIdx, draggedItem.subIndex, sIdx);
+                                    }
+                                    setDraggedItem(null);
+                                    setDragOverItem(null);
+                                  }}
+                                  onDragEnd={() => {
+                                    setDraggedItem(null);
+                                    setDragOverItem(null);
+                                  }}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '5px 10px',
+                                    borderRadius: '6px',
+                                    backgroundColor: isSkillDragOver ? 'rgba(0, 240, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                                    border: isSkillDragOver ? '1px dashed #00F0FF' : '1px solid rgba(255, 255, 255, 0.1)',
+                                    fontSize: '0.78rem',
+                                    opacity: isSkillDragging ? 0.3 : 1,
+                                    cursor: 'grab'
+                                  }}
+                                  title="Drag to rearrange skill tag order"
+                                >
+                                  <GripVertical size={11} color="var(--cyan-core)" style={{ opacity: 0.6 }} />
+                                  <span style={{ color: '#FFFFFF', fontWeight: 600 }}>{skill.name}</span>
+                                  <span style={{ fontSize: '0.68rem', color: 'var(--cyan-core)' }}>({skill.level})</span>
+                                  <button
+                                    onClick={() => setAddingSkillModal({ catIndex: catIdx, skillIndex: sIdx, name: skill.name, level: skill.level })}
+                                    style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer', padding: '0 2px' }}
+                                    title="Edit skill tag"
+                                  >
+                                    <Edit size={11} />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const updated = [...skills];
+                                      updated[catIdx].skills.splice(sIdx, 1);
+                                      setSkills(updated);
+                                      saveItem(KEYS.SKILLS, updated);
+                                    }}
+                                    style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '0 2px' }}
+                                    title="Delete skill tag"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            {cat.skills.length === 0 && (
+                              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                No skills in this category yet. Click "+ Add Skill Tag" above to add.
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
@@ -2682,36 +3025,135 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-                    {softSkills.map((item, idx) => (
-                      <div key={idx} className="glass-card" style={{ padding: '18px 20px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Zap size={16} color="var(--cyan-core)" />
-                            <span style={{ fontWeight: 700, color: '#FFFFFF', fontSize: '0.96rem' }}>{item.name}</span>
+                    {softSkills.map((item, idx) => {
+                      const isDragging = draggedItem?.section === 'soft-skills' && draggedItem.index === idx;
+                      const isDragOver = dragOverItem?.section === 'soft-skills' && dragOverItem.index === idx;
+                      return (
+                        <div
+                          key={idx}
+                          className="glass-card"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', '');
+                            setDraggedItem({ section: 'soft-skills', index: idx });
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                          }}
+                          onDragEnter={() => setDragOverItem({ section: 'soft-skills', index: idx })}
+                          onDragLeave={() => {
+                            if (dragOverItem?.section === 'soft-skills' && dragOverItem?.index === idx) {
+                              setDragOverItem(null);
+                            }
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            if (draggedItem && draggedItem.section === 'soft-skills' && draggedItem.index !== idx) {
+                              handleReorderSoftSkills(draggedItem.index, idx);
+                            }
+                            setDraggedItem(null);
+                            setDragOverItem(null);
+                          }}
+                          onDragEnd={() => {
+                            setDraggedItem(null);
+                            setDragOverItem(null);
+                          }}
+                          style={{
+                            padding: '18px 20px',
+                            opacity: isDragging ? 0.35 : 1,
+                            border: isDragOver ? '2px dashed #00F0FF' : '1px solid rgba(0, 240, 255, 0.2)',
+                            boxShadow: isDragOver ? '0 0 24px rgba(0, 240, 255, 0.4)' : undefined,
+                            cursor: 'grab',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                                  border: '1px solid rgba(0, 240, 255, 0.3)',
+                                  color: 'var(--cyan-core)',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700
+                                }}
+                                title="Drag to reorder soft skill card"
+                              >
+                                <GripVertical size={12} />
+                                <span>#{idx + 1}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleReorderSoftSkills(idx, idx - 1)}
+                                disabled={idx === 0}
+                                style={{
+                                  background: 'transparent',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  borderRadius: '4px',
+                                  color: idx === 0 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                  cursor: idx === 0 ? 'not-allowed' : 'pointer',
+                                  padding: '2px 4px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                                title="Move soft skill card up"
+                              >
+                                <ArrowUp size={11} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleReorderSoftSkills(idx, idx + 1)}
+                                disabled={idx === softSkills.length - 1}
+                                style={{
+                                  background: 'transparent',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  borderRadius: '4px',
+                                  color: idx === softSkills.length - 1 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                  cursor: idx === softSkills.length - 1 ? 'not-allowed' : 'pointer',
+                                  padding: '2px 4px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                                title="Move soft skill card down"
+                              >
+                                <ArrowDown size={11} />
+                              </button>
+
+                              <Zap size={15} color="var(--cyan-core)" style={{ marginLeft: '4px' }} />
+                              <span style={{ fontWeight: 700, color: '#FFFFFF', fontSize: '0.94rem' }}>{item.name}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                onClick={() => {
+                                  setEditingSoftSkill({ index: idx, item: { ...item } });
+                                  setIsNewSoftSkill(false);
+                                }}
+                                style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer' }}
+                                title="Edit soft skill"
+                              >
+                                <Edit size={15} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSoftSkill(idx)}
+                                style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}
+                                title="Delete soft skill"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            <button
-                              onClick={() => {
-                                setEditingSoftSkill({ index: idx, item: { ...item } });
-                                setIsNewSoftSkill(false);
-                              }}
-                              style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer' }}
-                            >
-                              <Edit size={15} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteSoftSkill(idx)}
-                              style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
+                          <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                            {item.desc}
+                          </p>
                         </div>
-                        <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                          {item.desc}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -2753,54 +3195,153 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {experiences.map((exp) => (
-                  <div key={exp.id} className="glass-card" style={{ padding: '22px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#FFFFFF' }}>{exp.role}</span>
-                          <span className="badge-neon" style={{ fontSize: '0.7rem' }}>{exp.type}</span>
+                {experiences.map((exp, eIdx) => {
+                  const isDragging = draggedItem?.section === 'experience' && draggedItem.index === eIdx;
+                  const isDragOver = dragOverItem?.section === 'experience' && dragOverItem.index === eIdx;
+                  return (
+                    <div
+                      key={exp.id}
+                      className="glass-card"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/plain', '');
+                        setDraggedItem({ section: 'experience', index: eIdx });
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
+                      onDragEnter={() => setDragOverItem({ section: 'experience', index: eIdx })}
+                      onDragLeave={() => {
+                        if (dragOverItem?.section === 'experience' && dragOverItem?.index === eIdx) {
+                          setDragOverItem(null);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedItem && draggedItem.section === 'experience' && draggedItem.index !== eIdx) {
+                          handleReorderExperiences(draggedItem.index, eIdx);
+                        }
+                        setDraggedItem(null);
+                        setDragOverItem(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedItem(null);
+                        setDragOverItem(null);
+                      }}
+                      style={{
+                        padding: '22px',
+                        opacity: isDragging ? 0.35 : 1,
+                        border: isDragOver ? '2px dashed #00F0FF' : '1px solid rgba(0, 240, 255, 0.2)',
+                        boxShadow: isDragOver ? '0 0 24px rgba(0, 240, 255, 0.4)' : undefined,
+                        cursor: 'grab',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <div
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                padding: '3px 7px',
+                                borderRadius: '5px',
+                                backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                                border: '1px solid rgba(0, 240, 255, 0.3)',
+                                color: 'var(--cyan-core)',
+                                fontSize: '0.72rem',
+                                fontWeight: 700
+                              }}
+                              title="Drag and drop to reorder position"
+                            >
+                              <GripVertical size={13} />
+                              <span>#{eIdx + 1}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleReorderExperiences(eIdx, eIdx - 1)}
+                              disabled={eIdx === 0}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
+                                borderRadius: '4px',
+                                color: eIdx === 0 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                cursor: eIdx === 0 ? 'not-allowed' : 'pointer',
+                                padding: '2px 5px',
+                                display: 'inline-flex',
+                                alignItems: 'center'
+                              }}
+                              title="Move experience up"
+                            >
+                              <ArrowUp size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleReorderExperiences(eIdx, eIdx + 1)}
+                              disabled={eIdx === experiences.length - 1}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
+                                borderRadius: '4px',
+                                color: eIdx === experiences.length - 1 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                cursor: eIdx === experiences.length - 1 ? 'not-allowed' : 'pointer',
+                                padding: '2px 5px',
+                                display: 'inline-flex',
+                                alignItems: 'center'
+                              }}
+                              title="Move experience down"
+                            >
+                              <ArrowDown size={12} />
+                            </button>
+
+                            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#FFFFFF' }}>{exp.role}</span>
+                            <span className="badge-neon" style={{ fontSize: '0.7rem' }}>{exp.type}</span>
+                          </div>
+                          <div style={{ fontSize: '0.88rem', color: 'var(--cyan-core)', fontWeight: 600, marginTop: '4px' }}>
+                            {exp.company} • {exp.location}
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            {exp.startDate} – {exp.endDate}
+                          </div>
                         </div>
-                        <div style={{ fontSize: '0.88rem', color: 'var(--cyan-core)', fontWeight: 600, marginTop: '2px' }}>
-                          {exp.company} • {exp.location}
-                        </div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                          {exp.startDate} – {exp.endDate}
+
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            onClick={() => {
+                              setEditingExperience(exp);
+                              setIsNewExperience(false);
+                            }}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer' }}
+                            title="Edit experience"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteExperience(exp.id)}
+                            style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}
+                            title="Delete experience"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          onClick={() => {
-                            setEditingExperience(exp);
-                            setIsNewExperience(false);
-                          }}
-                          style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer' }}
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteExperience(exp.id)}
-                          style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                      <ul style={{ paddingLeft: '18px', color: 'var(--text-secondary)', fontSize: '0.84rem', lineHeight: 1.6, marginBottom: '12px' }}>
+                        {exp.responsibilities.map((r, i) => (
+                          <li key={i}>{r}</li>
+                        ))}
+                      </ul>
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {exp.technologies.map((t) => (
+                          <span key={t} className="badge-tag" style={{ fontSize: '0.7rem' }}>{t}</span>
+                        ))}
                       </div>
                     </div>
-
-                    <ul style={{ paddingLeft: '18px', color: 'var(--text-secondary)', fontSize: '0.84rem', lineHeight: 1.6, marginBottom: '12px' }}>
-                      {exp.responsibilities.map((r, i) => (
-                        <li key={i}>{r}</li>
-                      ))}
-                    </ul>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      {exp.technologies.map((t) => (
-                        <span key={t} className="badge-tag" style={{ fontSize: '0.7rem' }}>{t}</span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -2842,46 +3383,151 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-                {projects.map((proj) => (
-                  <div key={proj.id} className="glass-card" style={{ padding: '22px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                        <span className="badge-neon" style={{ fontSize: '0.72rem' }}>{proj.category}</span>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button
-                            onClick={() => {
-                              setEditingProject(proj);
-                              setIsNewProject(false);
-                            }}
-                            style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer' }}
-                          >
-                            <Edit size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteProject(proj.id)}
-                            style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                {projects.map((proj, pIdx) => {
+                  const isDragging = draggedItem?.section === 'projects' && draggedItem.index === pIdx;
+                  const isDragOver = dragOverItem?.section === 'projects' && dragOverItem.index === pIdx;
+                  return (
+                    <div
+                      key={proj.id}
+                      className="glass-card"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/plain', '');
+                        setDraggedItem({ section: 'projects', index: pIdx });
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
+                      onDragEnter={() => setDragOverItem({ section: 'projects', index: pIdx })}
+                      onDragLeave={() => {
+                        if (dragOverItem?.section === 'projects' && dragOverItem?.index === pIdx) {
+                          setDragOverItem(null);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedItem && draggedItem.section === 'projects' && draggedItem.index !== pIdx) {
+                          handleReorderProjects(draggedItem.index, pIdx);
+                        }
+                        setDraggedItem(null);
+                        setDragOverItem(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedItem(null);
+                        setDragOverItem(null);
+                      }}
+                      style={{
+                        padding: '20px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        opacity: isDragging ? 0.35 : 1,
+                        border: isDragOver ? '2px dashed #00F0FF' : '1px solid rgba(0, 240, 255, 0.2)',
+                        boxShadow: isDragOver ? '0 0 24px rgba(0, 240, 255, 0.4)' : undefined,
+                        cursor: 'grab',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <div>
+                        {/* Reorder Toolbar & Badges */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                padding: '3px 7px',
+                                borderRadius: '5px',
+                                backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                                border: '1px solid rgba(0, 240, 255, 0.3)',
+                                color: 'var(--cyan-core)',
+                                fontSize: '0.72rem',
+                                fontWeight: 700
+                              }}
+                              title="Drag and drop this card to shift position"
+                            >
+                              <GripVertical size={13} />
+                              <span>#{pIdx + 1}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleReorderProjects(pIdx, pIdx - 1)}
+                              disabled={pIdx === 0}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
+                                borderRadius: '4px',
+                                color: pIdx === 0 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                cursor: pIdx === 0 ? 'not-allowed' : 'pointer',
+                                padding: '2px 5px',
+                                display: 'inline-flex',
+                                alignItems: 'center'
+                              }}
+                              title="Move project up"
+                            >
+                              <ArrowUp size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleReorderProjects(pIdx, pIdx + 1)}
+                              disabled={pIdx === projects.length - 1}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
+                                borderRadius: '4px',
+                                color: pIdx === projects.length - 1 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                cursor: pIdx === projects.length - 1 ? 'not-allowed' : 'pointer',
+                                padding: '2px 5px',
+                                display: 'inline-flex',
+                                alignItems: 'center'
+                              }}
+                              title="Move project down"
+                            >
+                              <ArrowDown size={12} />
+                            </button>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="badge-neon" style={{ fontSize: '0.7rem' }}>{proj.category}</span>
+                            <button
+                              onClick={() => {
+                                setEditingProject(proj);
+                                setIsNewProject(false);
+                              }}
+                              style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer' }}
+                              title="Edit project"
+                            >
+                              <Edit size={15} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProject(proj.id)}
+                              style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}
+                              title="Delete project"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
                         </div>
+
+                        <h4 style={{ fontSize: '1.12rem', color: '#FFFFFF', marginBottom: '6px' }}>{proj.title}</h4>
+                        <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '14px' }}>
+                          {proj.summary}
+                        </p>
                       </div>
 
-                      <h4 style={{ fontSize: '1.15rem', color: '#FFFFFF', marginBottom: '6px' }}>{proj.title}</h4>
-                      <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '14px' }}>
-                        {proj.summary}
-                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
+                        {proj.technologies.slice(0, 4).map((tech) => (
+                          <span key={tech} className="badge-tag" style={{ fontSize: '0.68rem' }}>{tech}</span>
+                        ))}
+                        {proj.technologies.length > 4 && (
+                          <span className="badge-tag" style={{ fontSize: '0.68rem' }}>+{proj.technologies.length - 4}</span>
+                        )}
+                      </div>
                     </div>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
-                      {proj.technologies.slice(0, 4).map((tech) => (
-                        <span key={tech} className="badge-tag" style={{ fontSize: '0.68rem' }}>{tech}</span>
-                      ))}
-                      {proj.technologies.length > 4 && (
-                        <span className="badge-tag" style={{ fontSize: '0.68rem' }}>+{proj.technologies.length - 4}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -2962,41 +3608,142 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
-                    {education.map((edu) => (
-                      <div key={edu.id} className="glass-card" style={{ padding: '22px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '0.78rem', color: 'var(--cyan-core)', fontWeight: 700 }}>
-                            {edu.gradeType}: {edu.grade}
-                          </span>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                              onClick={() => {
-                                setEditingEducation(edu);
-                                setIsNewEducation(false);
-                              }}
-                              style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer' }}
-                            >
-                              <Edit size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteEducation(edu.id)}
-                              style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
+                    {education.map((edu, edIdx) => {
+                      const isDragging = draggedItem?.section === 'education' && draggedItem.index === edIdx;
+                      const isDragOver = dragOverItem?.section === 'education' && dragOverItem.index === edIdx;
+                      return (
+                        <div
+                          key={edu.id}
+                          className="glass-card"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', '');
+                            setDraggedItem({ section: 'education', index: edIdx });
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                          }}
+                          onDragEnter={() => setDragOverItem({ section: 'education', index: edIdx })}
+                          onDragLeave={() => {
+                            if (dragOverItem?.section === 'education' && dragOverItem?.index === edIdx) {
+                              setDragOverItem(null);
+                            }
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            if (draggedItem && draggedItem.section === 'education' && draggedItem.index !== edIdx) {
+                              handleReorderEducation(draggedItem.index, edIdx);
+                            }
+                            setDraggedItem(null);
+                            setDragOverItem(null);
+                          }}
+                          onDragEnd={() => {
+                            setDraggedItem(null);
+                            setDragOverItem(null);
+                          }}
+                          style={{
+                            padding: '20px',
+                            opacity: isDragging ? 0.35 : 1,
+                            border: isDragOver ? '2px dashed #00F0FF' : '1px solid rgba(0, 240, 255, 0.2)',
+                            boxShadow: isDragOver ? '0 0 24px rgba(0, 240, 255, 0.4)' : undefined,
+                            cursor: 'grab',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  padding: '3px 7px',
+                                  borderRadius: '5px',
+                                  backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                                  border: '1px solid rgba(0, 240, 255, 0.3)',
+                                  color: 'var(--cyan-core)',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700
+                                }}
+                                title="Drag and drop to reorder"
+                              >
+                                <GripVertical size={13} />
+                                <span>#{edIdx + 1}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleReorderEducation(edIdx, edIdx - 1)}
+                                disabled={edIdx === 0}
+                                style={{
+                                  background: 'transparent',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  borderRadius: '4px',
+                                  color: edIdx === 0 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                  cursor: edIdx === 0 ? 'not-allowed' : 'pointer',
+                                  padding: '2px 5px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                                title="Move degree up"
+                              >
+                                <ArrowUp size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleReorderEducation(edIdx, edIdx + 1)}
+                                disabled={edIdx === education.length - 1}
+                                style={{
+                                  background: 'transparent',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  borderRadius: '4px',
+                                  color: edIdx === education.length - 1 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                  cursor: edIdx === education.length - 1 ? 'not-allowed' : 'pointer',
+                                  padding: '2px 5px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                                title="Move degree down"
+                              >
+                                <ArrowDown size={12} />
+                              </button>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--cyan-core)', fontWeight: 700 }}>
+                                {edu.gradeType}: {edu.grade}
+                              </span>
+                            </div>
 
-                        <h4 style={{ fontSize: '1.1rem', color: '#FFFFFF', marginBottom: '4px' }}>{edu.degree}</h4>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>{edu.institution} • {edu.location}</div>
-                        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginBottom: '10px' }}>{edu.startDate} – {edu.endDate}</div>
-                        {edu.description && (
-                          <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                            {edu.description}
-                          </p>
-                        )}
-                      </div>
-                    ))}
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                onClick={() => {
+                                  setEditingEducation(edu);
+                                  setIsNewEducation(false);
+                                }}
+                                style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer' }}
+                                title="Edit degree"
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteEducation(edu.id)}
+                                style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}
+                                title="Delete degree"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <h4 style={{ fontSize: '1.08rem', color: '#FFFFFF', marginBottom: '4px' }}>{edu.degree}</h4>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>{edu.institution} • {edu.location}</div>
+                          <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginBottom: '10px' }}>{edu.startDate} – {edu.endDate}</div>
+                          {edu.description && (
+                            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                              {edu.description}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
@@ -3027,38 +3774,140 @@ CREATE POLICY "Admin reset tokens access" ON admin_password_resets FOR ALL USING
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
                     {achievements
                       .filter((a) => a.type === 'Certification')
-                      .map((cert) => (
-                        <div key={cert.id} className="glass-card" style={{ padding: '22px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <span className="badge-neon" style={{ fontSize: '0.7rem' }}>Certification</span>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <button
-                                onClick={() => {
-                                  setEditingAchievement(cert);
-                                  setIsNewAchievement(false);
-                                }}
-                                style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer' }}
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteAchievement(cert.id)}
-                                style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </div>
+                      .map((cert, cIdx) => {
+                        const isDragging = draggedItem?.section === 'certifications' && draggedItem.index === cIdx;
+                        const isDragOver = dragOverItem?.section === 'certifications' && dragOverItem.index === cIdx;
+                        const totalCerts = achievements.filter((a) => a.type === 'Certification').length;
+                        return (
+                          <div
+                            key={cert.id}
+                            className="glass-card"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', '');
+                              setDraggedItem({ section: 'certifications', index: cIdx });
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'move';
+                            }}
+                            onDragEnter={() => setDragOverItem({ section: 'certifications', index: cIdx })}
+                            onDragLeave={() => {
+                              if (dragOverItem?.section === 'certifications' && dragOverItem?.index === cIdx) {
+                                setDragOverItem(null);
+                              }
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              if (draggedItem && draggedItem.section === 'certifications' && draggedItem.index !== cIdx) {
+                                handleReorderCertifications(draggedItem.index, cIdx);
+                              }
+                              setDraggedItem(null);
+                              setDragOverItem(null);
+                            }}
+                            onDragEnd={() => {
+                              setDraggedItem(null);
+                              setDragOverItem(null);
+                            }}
+                            style={{
+                              padding: '20px',
+                              opacity: isDragging ? 0.35 : 1,
+                              border: isDragOver ? '2px dashed #00F0FF' : '1px solid rgba(0, 240, 255, 0.2)',
+                              boxShadow: isDragOver ? '0 0 24px rgba(0, 240, 255, 0.4)' : undefined,
+                              cursor: 'grab',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <div
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    padding: '3px 7px',
+                                    borderRadius: '5px',
+                                    backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                                    border: '1px solid rgba(0, 240, 255, 0.3)',
+                                    color: 'var(--cyan-core)',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700
+                                  }}
+                                  title="Drag and drop to reorder"
+                                >
+                                  <GripVertical size={13} />
+                                  <span>#{cIdx + 1}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleReorderCertifications(cIdx, cIdx - 1)}
+                                  disabled={cIdx === 0}
+                                  style={{
+                                    background: 'transparent',
+                                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                                    borderRadius: '4px',
+                                    color: cIdx === 0 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                    cursor: cIdx === 0 ? 'not-allowed' : 'pointer',
+                                    padding: '2px 5px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center'
+                                  }}
+                                  title="Move certification up"
+                                >
+                                  <ArrowUp size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleReorderCertifications(cIdx, cIdx + 1)}
+                                  disabled={cIdx === totalCerts - 1}
+                                  style={{
+                                    background: 'transparent',
+                                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                                    borderRadius: '4px',
+                                    color: cIdx === totalCerts - 1 ? 'rgba(255, 255, 255, 0.2)' : 'var(--cyan-core)',
+                                    cursor: cIdx === totalCerts - 1 ? 'not-allowed' : 'pointer',
+                                    padding: '2px 5px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center'
+                                  }}
+                                  title="Move certification down"
+                                >
+                                  <ArrowDown size={12} />
+                                </button>
+                                <span className="badge-neon" style={{ fontSize: '0.7rem' }}>Certification</span>
+                              </div>
 
-                          <h4 style={{ fontSize: '1.1rem', color: '#FFFFFF', marginBottom: '4px' }}>{cert.title}</h4>
-                          <div style={{ fontSize: '0.84rem', color: 'var(--cyan-core)', fontWeight: 600, marginBottom: '8px' }}>
-                            {cert.organization}
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                  onClick={() => {
+                                    setEditingAchievement(cert);
+                                    setIsNewAchievement(false);
+                                  }}
+                                  style={{ background: 'transparent', border: 'none', color: 'var(--cyan-core)', cursor: 'pointer' }}
+                                  title="Edit certification"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteAchievement(cert.id)}
+                                  style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer' }}
+                                  title="Delete certification"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+
+                            <h4 style={{ fontSize: '1.08rem', color: '#FFFFFF', marginBottom: '4px' }}>{cert.title}</h4>
+                            <div style={{ fontSize: '0.84rem', color: 'var(--cyan-core)', fontWeight: 600, marginBottom: '8px' }}>
+                              {cert.organization}
+                            </div>
+                            <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                              {cert.description}
+                            </p>
                           </div>
-                          <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                            {cert.description}
-                          </p>
-                        </div>
-                      ))}
+                        );
+                      })}
                   </div>
                 </div>
               )}
