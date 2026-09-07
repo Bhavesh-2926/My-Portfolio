@@ -30,13 +30,7 @@ export const Achievements: React.FC<AchievementsProps> = ({ achievements }) => {
           </h2>
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '24px'
-          }}
-        >
+        <div className="cards-grid-3">
           {achievements.map((item) => (
             <div
               key={item.id}

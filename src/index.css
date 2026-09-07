@@ -281,6 +281,58 @@ h1, h2, h3, h4 {
   }
 }
 
+/* 3 Cards Grid for Certifications & Education */
+.cards-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 26px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+@media (max-width: 1024px) {
+  .cards-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .cards-grid-3 {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}
+
+/* Education Cards Grid: Automatically accommodates 2 cards or 3+ cards */
+.education-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 26px;
+  max-width: 1200px;
+  margin: 0 auto 80px;
+}
+
+.education-cards-grid.three-col {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1024px) {
+  .education-cards-grid,
+  .education-cards-grid.three-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .education-cards-grid,
+  .education-cards-grid.three-col {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}
+
 /* Hero 2-Half Split Layout */
 .hero-two-col {
   display: grid;

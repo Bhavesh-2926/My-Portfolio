@@ -35,16 +35,8 @@ export const EducationSection: React.FC<EducationProps> = ({ education, achievem
           </p>
         </div>
 
-        {/* Education Cards Grid */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-            gap: '30px',
-            maxWidth: '960px',
-            margin: '0 auto 80px'
-          }}
-        >
+        {/* Education Cards Grid: Shows up to 3 cards per line, automatically fitting 3 in line 1 when updated */}
+        <div className={`education-cards-grid ${education.length >= 3 ? 'three-col' : ''}`}>
           {education.map((item) => (
             <div
               key={item.id}
@@ -136,15 +128,8 @@ export const EducationSection: React.FC<EducationProps> = ({ education, achievem
             </p>
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-              gap: '24px',
-              maxWidth: '840px',
-              margin: '0 auto'
-            }}
-          >
+          {/* Certifications Grid: Exactly 3 cards per row on desktop */}
+          <div className="cards-grid-3">
             {achievements
               .filter((item) => item.type === 'Certification')
               .map((item) => (
